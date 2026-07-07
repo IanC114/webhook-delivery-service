@@ -5,6 +5,8 @@ from json import JSONDecodeError
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, Request
 import uvicorn
 
+import prometheus_client
+
 
 class ConnectionManager:
     def __init__(self):
@@ -13,9 +15,11 @@ class ConnectionManager:
     async def connect(self, hook_id, websocket: WebSocket):
         await websocket.accept()
         self.websockets[hook_id].append(websocket)
+        clients_count.inc()
 
     def disconnect(self, hook_id, websocket: WebSocket):
         self.websockets[hook_id].remove(websocket)
+        clients_count.dec()
 
         if not self.websockets[hook_id]:
             del self.websockets[hook_id]
@@ -27,6 +31,10 @@ class ConnectionManager:
 
 app = FastAPI()
 manager = ConnectionManager()
+clients_count = prometheus_client.Gauge(
+    "clients_count",
+    "Number of clients"
+)
 
 
 @app.post("/webhook/")
@@ -56,6 +64,14 @@ async def websocket_endpoint(hook_id: str, websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(hook_id, websocket)
+
+
+@app.get('/metrics')
+def get_metrics():
+    return Response(
+        content=prometheus_client.generate_latest(),
+        media_type="text/plain"
+    )
 
 
 if __name__ == "__main__":
