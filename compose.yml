@@ -10,7 +10,7 @@ services:
       - webhook-service
   prometheus:
     image: prom/prometheus:latest
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command:

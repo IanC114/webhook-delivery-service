@@ -10,22 +10,23 @@ import prometheus_client
 
 class ConnectionManager:
     def __init__(self):
-        self.websockets = defaultdict(list)
+        self.connections = defaultdict(list)
 
-    async def connect(self, hook_id, websocket: WebSocket):
+    async def connect(self, hook_id: str, websocket: WebSocket):
         await websocket.accept()
-        self.websockets[hook_id].append(websocket)
-        clients_count.inc()
+        self.connections[hook_id].append(websocket)
+        clients_count.labels(id=hook_id).inc()
 
-    def disconnect(self, hook_id, websocket: WebSocket):
-        self.websockets[hook_id].remove(websocket)
-        clients_count.dec()
+    def disconnect(self, hook_id: str, websocket: WebSocket):
+        self.connections[hook_id].remove(websocket)
+        clients_count.labels(id=hook_id).dec()
 
-        if not self.websockets[hook_id]:
-            del self.websockets[hook_id]
+        if not self.connections[hook_id]:
+            del self.connections[hook_id]
+            clients_count.remove(hook_id)
 
-    async def broadcast(self, hook_id, data):
-        for websocket in self.websockets.get(hook_id, []):
+    async def broadcast(self, hook_id: str, data):
+        for websocket in self.connections.get(hook_id, []):
             await websocket.send_json(data)
 
 
@@ -33,7 +34,8 @@ app = FastAPI()
 manager = ConnectionManager()
 clients_count = prometheus_client.Gauge(
     "clients_count",
-    "Number of clients"
+    "Number of clients by id",
+    ["id"]
 )
 
 
